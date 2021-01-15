@@ -1,8 +1,44 @@
 import requests
 import re
 import urllib3
+import os
+from datetime import datetime
+#from pytz import timezone
+from github import Github
+
+ISSUE_COUNT= 0
+FILTERLIST_URL = "https://easylist-downloads.adblockplus.org/koreanlist+easylist.txt"
+ISSUE_BODY= ""
+
+def printIssue(mystr):
+    global ISSUE_BODY
+    print(mystr)
+    ISSUE_BODY += mystr + "\n"
+
+def publishAnIssue():
+    global ISSUE_COUNT, ISSUE_BODY
+    if ISSUE_COUNT == 0:
+        print("no any issue to publish.")
+        return
+        
+    access_token = os.environ['MY_GITHUB_TOKEN']
+    repository_name= "DomainChecker"
+
+    # german_timezone = timezone('Europe/Berlin')
+    # today = datetime.now(german_timezone)
+    # today_data = today.strftime("%d.%m.%Y")
+    title= "Found "+str(ISSUE_COUNT)+" domain issue(s)."
+
+    g = Github(access_token)
+    for repo in g.get_user().get_repos():
+        print(repo.name)
+
+    repo = g.get_user().get_repo(repository_name)
+    res= repo.create_issue(title=title, body=ISSUE_BODY)
+    print(res)
 
 def readSourceFromABPFilters(url, target):
+    global ISSUE_COUNT, ISSUE_BODY
     http = urllib3.PoolManager()
     response = http.request('GET', url)
     data = response.data.decode('utf-8')
@@ -22,8 +58,9 @@ def readSourceFromABPFilters(url, target):
             # number of the written filter is old.
             if(extracted < number_of_domain):
                 renewed_filter= line.replace(str(extracted), str(number_of_domain))
-                print("Filter update suggestion: " + line + " --> " + renewed_filter)
-    print("")
+                printIssue("Filter update suggestion: " + line + " --> " + renewed_filter)
+                ISSUE_COUNT += 1
+    printIssue("")
 
 def extract_number(url):
     parsed_int_list= re.findall("\d+", url)
@@ -33,6 +70,7 @@ def extract_number(url):
     return parsed_int
 
 def url_ok(url):
+    global ISSUE_BODY
     if "http" not in url:
         url = "https://"+ url
 
@@ -49,15 +87,15 @@ def url_ok(url):
             replaced= url.replace(str(parsed_int), str(i))
             r = requests.head(replaced)
             if r.status_code != 200:
-                print(replaced + ": status("+r.status_code+")")
+                printIssue(replaced + ": status("+r.status_code+")")
             else:
-                print(replaced+": working great")
+                printIssue(replaced+": working fine")
                 found_domain_works= True
                 which_number_latest_works= i
                 working_domains.append(replaced)
             i=i+1
         except Exception:
-            print(replaced+": not working")
+            printIssue(replaced+": not working")
             i=i+1
             continue
     return working_domains
@@ -71,4 +109,6 @@ for line in Lines:
 
     working_domains= url_ok(line.strip())
     for domain in working_domains:
-        readSourceFromABPFilters("https://easylist-downloads.adblockplus.org/koreanlist+easylist.txt", domain)
+        readSourceFromABPFilters(FILTERLIST_URL, domain)
+        
+publishAnIssue()
