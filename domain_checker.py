@@ -99,14 +99,14 @@ def url_ok(url):
         if found_domain_works and i > parsed_int+1 and not which_number_latest_works == i-1:
             printIssue("")
             break
-        if i > 100:
+        if i > 150:
             printIssue("")
             break
         try:
             replaced= url.replace(str(parsed_int), str(i))
             replaced_prev= url.replace(str(parsed_int), str(i-1))
 
-            r = requests.head(replaced, allow_redirects=False)
+            r = requests.head(replaced, allow_redirects=False, timeout=10)
             if r.status_code == 301 or r.status_code == 302:
                 printIssue(replaced + ": redirection detected("+str(r.status_code)+") :leftwards_arrow_with_hook:")
                 found_domain_works= True
