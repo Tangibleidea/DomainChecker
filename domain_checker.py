@@ -22,7 +22,7 @@ def publishAnIssue():
         print("no any issue to publish.")
         return
     access_token = os.environ['MY_GITHUB_TOKEN']
-    repository_name= "DomainChecker"
+    repository_name= "KoreanList"
 
     # german_timezone = timezone('Europe/Berlin')
     # today = datetime.now(german_timezone)
