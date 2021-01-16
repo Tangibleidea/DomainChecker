@@ -8,6 +8,7 @@ from github import Github
 
 ISSUE_COUNT= 0
 FILTERLIST_URL = "https://easylist-downloads.adblockplus.org/koreanlist+easylist.txt"
+FILTER_DATA= ""
 ISSUE_BODY= ""
 
 def printIssue(mystr):
@@ -34,10 +35,12 @@ def publishAnIssue():
     print(res)
 
 def readSourceFromABPFilters(url, target):
-    global ISSUE_COUNT, ISSUE_BODY
-    http = urllib3.PoolManager()
-    response = http.request('GET', url)
-    data = response.data.decode('utf-8')
+    global ISSUE_COUNT, ISSUE_BODY, FILTER_DATA
+    # download filter data from URL 
+    if FILTER_DATA == "":
+        http = urllib3.PoolManager()
+        response = http.request('GET', url)
+        FILTER_DATA = response.data.decode('utf-8')
 
     target= target.replace("http://", "")
     target= target.replace("https://", "")
@@ -45,7 +48,7 @@ def readSourceFromABPFilters(url, target):
     number_of_domain= extract_number(target)
     _pattern= target.replace(str(number_of_domain), "(\d{1,3}|\*)")
 
-    for line in data.splitlines():
+    for line in FILTER_DATA.splitlines():
         searched= re.search(_pattern, line)
         # found a target domain
         if(searched):
@@ -74,6 +77,13 @@ def extract_number(url):
     parsed_int= int(parsed_int_list[0])
     return parsed_int
 
+def tryAccessWithFakeHeaders(url):
+    hearders = {'headers':'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:51.0) Gecko/20100101 Firefox/51.0'}
+    n = requests.get(url, headers=hearders)
+    al = n.text
+    title= al[al.find('<title>') + 7 : al.find('</title>')]
+    return title
+
 def url_ok(url):
     global ISSUE_BODY
     if "http" not in url:
@@ -87,23 +97,41 @@ def url_ok(url):
 
     while True:
         if found_domain_works and i > parsed_int+1 and not which_number_latest_works == i-1:
+            printIssue("")
             break
         if i > 100:
             printIssue("")
             break
         try:
             replaced= url.replace(str(parsed_int), str(i))
-            r = requests.head(replaced)
-            if r.status_code != 200:
-                printIssue(replaced + ": status("+r.status_code+") :grey_question:")
+            replaced_prev= url.replace(str(parsed_int), str(i-1))
+
+            r = requests.head(replaced, allow_redirects=False)
+            if r.status_code == 301 or r.status_code == 302:
+                printIssue(replaced + ": redirection detected("+str(r.status_code)+") :leftwards_arrow_with_hook:")
+                found_domain_works= True
+                which_number_latest_works= i
+            elif r.status_code != 200:
+                printIssue(replaced + ": status("+str(r.status_code)+") :grey_question:")
+                found_domain_works= True
+                which_number_latest_works= i
+                #title= tryAccessWithFakeHeaders(url)
+                # if title is not None:
+                #     printIssue("Title: " + title)
+                #     found_domain_works= True
+                #     which_number_latest_works= i
+                #     working_domains.append(replaced)
             else:
                 printIssue(replaced+": working fine :white_check_mark:")
                 found_domain_works= True
                 which_number_latest_works= i
                 working_domains.append(replaced)
             i=i+1
-        except Exception:
+        except Exception as e:
+            #print(str(e))
             printIssue(replaced+": not working :no_entry_sign:")
+            if found_domain_works:
+                working_domains.append(replaced_prev)
             i=i+1
             continue
     return working_domains
@@ -116,6 +144,7 @@ for line in Lines:
         continue
 
     working_domains= url_ok(line.strip())
+    working_domains= list(set(working_domains))
     for domain in working_domains:
         readSourceFromABPFilters(FILTERLIST_URL, domain)
         
