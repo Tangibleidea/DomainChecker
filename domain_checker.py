@@ -20,7 +20,6 @@ def publishAnIssue():
     if ISSUE_COUNT == 0:
         print("no any issue to publish.")
         return
-        
     access_token = os.environ['MY_GITHUB_TOKEN']
     repository_name= "DomainChecker"
 
@@ -30,9 +29,6 @@ def publishAnIssue():
     title= "Found "+str(ISSUE_COUNT)+" domain issue(s)."
 
     g = Github(access_token)
-    for repo in g.get_user().get_repos():
-        print(repo.name)
-
     repo = g.get_user().get_repo(repository_name)
     res= repo.create_issue(title=title, body=ISSUE_BODY)
     print(res)
@@ -47,25 +43,34 @@ def readSourceFromABPFilters(url, target):
     target= target.replace("https://", "")
 
     number_of_domain= extract_number(target)
-    _pattern= target.replace(str(number_of_domain), "\d{1,3}")
+    _pattern= target.replace(str(number_of_domain), "(\d{1,3}|\*)")
 
     for line in data.splitlines():
         searched= re.search(_pattern, line)
-        # found a domain
+        # found a target domain
         if(searched):
+            # substringed : only a domain
+            # extracted : only a number of domain
             substringed= line[searched.start():searched.end()]
             extracted= extract_number(substringed)
+            if(extracted == -1):
+                printIssue(line +" :arrow_right: (nothing to fix) :thumbsup:")
+                continue
             # number of the written filter is old.
             if(extracted < number_of_domain):
-                renewed_filter= line.replace(str(extracted), str(number_of_domain))
-                printIssue("Filter update suggestion: " + line + " --> " + renewed_filter)
                 ISSUE_COUNT += 1
+                renewed_filter= line.replace(str(extracted), str(number_of_domain))
+                printIssue(str(ISSUE_COUNT) + ". Filter update suggestion:\n" + line + " :arrow_right: " + renewed_filter)
+            elif(extracted == number_of_domain):
+                printIssue(line +" :arrow_right: (nothing to fix) :thumbsup:")
     printIssue("")
 
 def extract_number(url):
     parsed_int_list= re.findall("\d+", url)
     if len(parsed_int_list) == 0:
-        raise Exception("no any digits in url")
+        #raise Exception("no any digits in url("+url+")")
+        print("no any digits in url("+url+")")
+        return -1
     parsed_int= int(parsed_int_list[0])
     return parsed_int
 
@@ -83,19 +88,22 @@ def url_ok(url):
     while True:
         if found_domain_works and i > parsed_int+1 and not which_number_latest_works == i-1:
             break
+        if i > 100:
+            printIssue("")
+            break
         try:
             replaced= url.replace(str(parsed_int), str(i))
             r = requests.head(replaced)
             if r.status_code != 200:
-                printIssue(replaced + ": status("+r.status_code+")")
+                printIssue(replaced + ": status("+r.status_code+") :grey_question:")
             else:
-                printIssue(replaced+": working fine")
+                printIssue(replaced+": working fine :white_check_mark:")
                 found_domain_works= True
                 which_number_latest_works= i
                 working_domains.append(replaced)
             i=i+1
         except Exception:
-            printIssue(replaced+": not working")
+            printIssue(replaced+": not working :no_entry_sign:")
             i=i+1
             continue
     return working_domains
